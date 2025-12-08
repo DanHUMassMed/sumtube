@@ -1,0 +1,15 @@
+[project]
+name = "sumtube"
+version = "0.1.0"
+description = "Summarize YouTube videos"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "ipykernel==7.1.0",
+    "markdown2>=2.5.4",
+    "mdformat>=1.0.0",
+    "mdformat-gfm>=1.0.0",
+    "ollama>=0.6.1",
+    "weasyprint>=67.0",
+    "youtube-transcript-api>=1.2.3",
+]

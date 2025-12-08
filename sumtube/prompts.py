@@ -1,5 +1,5 @@
 MAIN_SYSTEM_PROMPT = (
-    "As a critical thinker  and professional summarizer, create a detailed summary of the provided text segment.\n\n"
+    "As a critical thinker and professional summarizer, create a detailed summary of the provided text segment.\n\n"
     "Focus on capturing the main ideas and essential information, maintaining clarity and coherence. "
     "Rely strictly on the provided text, without including external information. "
     "Format the summary in paragraph form providing a comprehensive understanding. "

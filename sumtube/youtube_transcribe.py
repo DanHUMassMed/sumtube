@@ -24,11 +24,13 @@ def get_transcript(video_id, output_file=None, language='en'):
 
     try:
         # Get the transcript
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id, languages=[language])
+        ytt_api = YouTubeTranscriptApi()
+        fetched_transcript = ytt_api.fetch(video_id=video_id, languages=[language])
+        transcript_data = fetched_transcript.to_raw_data()
         
         # Combine all transcript pieces into one text
         transcript_text = ""
-        for entry in transcript_list:
+        for entry in transcript_data:
             transcript_text += entry['text'] + " "
         
         # Clean up the text
