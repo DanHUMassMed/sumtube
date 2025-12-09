@@ -1,9 +1,9 @@
-#!/usr/bin/env python3
+
 import os
 import argparse
 from sumtube.utils.config_util import print_config, interactive_set_config, get_config_json
 from sumtube.podcast_summary import PodcastSummary
-from sumtube.youtube_transcribe import extract_video_id
+from sumtube.youtube_client import YouTubeClient
 
 def main():
     parser = argparse.ArgumentParser(description='Summarize YouTube videos CLI.')
@@ -38,12 +38,6 @@ def main():
     if not args.podcast_url:
         print("Error: --podcast_url is required unless --print-config or --set-config is used.")
         parser.print_help()
-        return
-
-    try:
-        video_id = extract_video_id(args.podcast_url)
-    except Exception:
-        print("Error: Can not parse the provided URL")
         return
 
     if args.recover:
