@@ -1,6 +1,6 @@
-# Overview of LexPodcastSummary: Automated Podcast Summarization Using Ollama
+# Overview of PodcastSummary: Automated Podcast Summarization Using Ollama
 
-The `LexPodcastSummary` class represents a powerful tool for automatically generating structured summaries of Lex Fridman podcasts using local LLM inference via Ollama. This text breaks down the architecture and workflow of this AI-powered summarization pipeline.
+The `PodcastSummary` class represents a powerful tool for automatically generating structured summaries of podcasts using local LLM inference via Ollama. This text breaks down the architecture and workflow of this AI-powered summarization pipeline.
 
 ## Core Architecture
 
@@ -11,7 +11,7 @@ At its heart, the class implements a multi-stage process:
 4. Generate structured report sections (Introduction, Body, Conclusion)
 5. Compile a final polished summary as a PDF
 
-The system chunks the transcript into manageable pieces as most LLMs do not have a context window large enough to handle a full podcast. A typical podcast can be well over 100k tokens, far exceeding the context limits of most models. This chunking strategy allows the system to process lengthy content that would otherwise be impossible to summarize in a single pass.
+The system chunks the transcript into manageable pieces as most LLMs do not have a context window large enough to handle a full podcast. A typical podcast can be well over 100k tokens, often exceeding the context limits of most open source models. This chunking strategy allows the system to process lengthy content that would otherwise be impossible to summarize in a single pass.
 
 The system leverages checkpointing to ensure progress is preserved between runs, making it resilient to interruptions. The checkpoint also allows for the modification of prompts or changing of models to easily compare different approaches.
 
@@ -21,7 +21,7 @@ The system leverages checkpointing to ensure progress is preserved between runs,
 
 The constructor sets up the working environment with sensible defaults:
 - Creates a uniquely named results directory
-- Configures the LLM parameters (using llama3.3 by default)
+- Configures the LLM parameters (using gpt-oss:20b by default)
 - Sets up file paths for artifacts
 - Validates YouTube API credentials
 
@@ -41,7 +41,7 @@ These configuration parameters control important aspects of the system:
   
 - **temperature**: Controls the amount of creativity or randomness in the model's responses. This is typically a real number between 0.0 (more deterministic) and 1.0 (more creative), though some models may allow temperature values above 1.
 
-- **num_cxt**: Establishes the size of the context window for the LLM, measured in tokens. This cannot exceed the model's predefined context limit, but making it smaller can save memory on systems that are constrained by available RAM. Adjusting this parameter allows for balancing between processing capacity and resource utilization.
+- **num_cxt**: Establishes the size of the context window for the LLM, measured in tokens. This cannot exceed the model's predefined context limit, but making it smaller can save memory on systems that are constrained by available RAM/VRAM. Adjusting this parameter allows for balancing between processing capacity and resource utilization.
 
 - **raw_text_chunk_size**: Measured in bytes (approximately four bytes per token), this determines the size of each transcript chunk processed independently.
 
@@ -65,7 +65,7 @@ $$\text{maxSummaryResponseSize} = \frac {(\text{numCtx} \times 4) \times 60\%} {
 This calculation ensures the total size of all summaries won't exceed the available context window. The remaining 40% of the context window is reserved for:
 - Introduction (10%)
 - Conclusion (10%)
-- Instruction prompt to the LLM (10%)
+- Instruction prompts to the LLM (10%)
 - Safety cushion (10%)
 
 By maintaining this balance, we can efficiently aggregate all summaries in the final processing step while staying within context limits.
@@ -76,12 +76,12 @@ The system extracts podcast content using YouTube APIs:
 ```python
 @checkpoint     
 def _get_title_and_transcript(self):
-    """ Pulls the details of the video from youtube. """
-    video_id = extract_video_id(self.lex_url)
-    self.title = get_video_title(video_id, self.api_key)
-    self.thumbnail_url = get_video_thumbnail(video_id, self.api_key, self.thumbnail_file_path)
-    transcript = get_transcript(video_id, self.transcript_file_path)
-    return (self.title, transcript)
+    """ Pulls the details of the video from youtube. 
+    This includes the video title, transcript text and a thumbnail."""
+    transcript_file_path = f"{self.working_dir}/{TRANSCRIPT_FILE}"
+    thumbnail_file_path = f"{self.working_dir}/{THUMBNAIL_FILE}"
+    self.youtube_client.get_transcript(self.video_id, transcript_file_path)
+    self.youtube_client.download_thumbnail(self.video_id, thumbnail_file_path)
 ```
 
 To use this feature, you'll need a YouTube API key, which can be obtained from the Google Developers Console: https://developers.google.com/youtube/v3/getting-started
@@ -90,78 +90,163 @@ To use this feature, you'll need a YouTube API key, which can be obtained from t
 ### Transcript Processing
 
 Lengthy transcripts are intelligently chunked to fit within model context windows:
+
 ```python
 def _chunk_transcript(self):
-    return chunk_text(self.transcript_file_path, self.raw_text_chunk_size, self.text_chunk_overlay_size)
+    """Simplifies the call to chunk_text because we already know all the parameters"""
+    transcript_file_path = f"{self.working_dir}/{TRANSCRIPT_FILE}"
+    return self.youtube_client.chunk_text(transcript_file_path, self.raw_text_chunk_size, self.text_chunk_overlay_size)
 ```
 
-### Summarization Pipeline
+### Prompt Engineering and transcript processing
 
-The core summarization occurs in multiple stages:
+Large Language Models are extremely sensitive to instructions, context, and formatting. The `PodcastSummary` pipeline uses specialized system and instruction prompts to guide the model through a multi-stage summarization process. Rather than one giant prompt, the system progressively refines and transforms the podcast transcript into structured, publishable content.
 
-1. **Chunk summarization**: Each transcript chunk is independently summarized
+This pipeline demonstrates three advanced prompt engineering techniques:
+
+#### 1. Role Assignment
+Each stage explicitly tells the model what kind of expert it should act as:
+- “AI research assistant”
+- “professional summarizer”
+- “professional writer”
+
+Assigning a role consistently improves factual tone, avoids hallucinations, and keeps the writing style stable across chunks even when text sources differ.
+
+#### 2. Instructional Scope
+Each prompt is scoped to a specific phase:
+- summarize one chunk
+- integrate multiple chunks
+- create introduction
+- create conclusion
+- merge the final report
+
+Each instruction tells the model exactly what this step is responsible for and what not to do, preventing drift between iterative calls.
+
+#### 3. Hierarchical Prompting
+The system uses a layered prompt architecture:
+
+| Level              | Purpose                      |
+| ------------------ | ---------------------------- |
+| System Prompts     | tone, persona, format        |
+| Instruction Prompts| step-by-step task guidance   |
+| Text Context       | the actual transcript        |
+| Output             | the final structured result  |
+
+This architecture lets the system build understanding in stages—chunks become summaries, summaries become sections, and sections become a polished final report.
+
+---
+
+# Example: Chunk Summarization Prompt
+
 ```python
-@checkpoint
-def _summarize_chunk(self, context: str, max_summary_response_size: int, chunk_index: int) -> str:
-    # Summarizes an individual chunk with appropriate prompting
+SUMMARIZE_CHUNK_PROMPT = (
+  "As a professional summarizer, create a detailed summary..."
+  "Use the == Title == ..."
+  "not exceeding {max_summary_response_size} bytes..."
+)
 ```
 
-2. **Section generation**: The system produces structured report sections
+Why it works:
+- size control
+- objective tone
+- avoids hallucination
+- stable formatting
+- consistent across all chunks
+
+---
+
+# Example: Report Section Prompt
+
 ```python
-@checkpoint
-def _introduction_text(self, concatenated_content):
-    # Generates introduction from summarized chunks
+CREATE_REPORT_BODY_PROMPT = (
+  "Integrate the provided ==SubContext== into a unified body..."
+  "Do NOT include introduction or conclusion..."
+  "Organize the material into ### topic headers..."
+)
 ```
 
-3. **Final assembly**: All sections are combined into a cohesive document
+This prompt explicitly forces:
+- topic hierarchy
+- structured headings
+- de-duplication of ideas
+- academic tone
+- logical flow
+
+---
+
+# Final Stage Polishing
+
 ```python
-@checkpoint
-def _final_report_text(self, concatenated_content):
-    # Creates the final polished report
+FINAL_REPORT_SYSTEM_PROMPT = (
+  "You are a professional writer..."
+  "You apply APA formatting..."
+)
 ```
 
-### Output Generation
+This stage focuses on refinement:
+- voice alignment
+- academic writing
+- consistent formatting
+- polished publication-ready document
 
-The final report is formatted as a PDF with proper styling:
-```python
-def _markdown_to_pdf(self, markdown_content):
-    # Formats markdown content and converts to PDF
-    markdown_content = mdformat.text(markdown_content, extensions={"gfm"})
-    thumbnail = f"![Thumbnail](file://{os.path.abspath(self.thumbnail_file_path)})\n\n"
-    markdown_content = thumbnail + f"[{self.lex_url}]({self.lex_url})\n\n" + markdown_content
-    HTML(string=markdown2.markdown(markdown_content)).write_pdf(output_pdf_path)
-```
+---
+
+# Why Prompt Engineering Matters in This Project
+
+Traditional summarization fails because:
+- podcasts exceed context limits
+- long-form dialogue lacks structure
+- topic shifts occur frequently
+- transcripts contain noise
+
+This system applies:
+- segmentation
+- scoped prompting
+- role consistency
+- hierarchical refinement
+- model-driven section synthesis
+
+The result is a factual, well-structured, academically styled, coherent, and professionally formatted document.
+
+All running locally.
+
+---
+
+# What Users Learn About Prompt Engineering
+
+Readers will understand that:
+- prompts = programmatic instructions
+- prompts define model behavior
+- LLM pipelines need staged logic
+- rewriting prompts changes output
+- models follow explicit constraints
+- professional results require multiple refinement phases
+
+This README teaches the fundamentals of:
+- prompt structure
+- multi-stage prompting
+- context control
+- LLM pipeline design
+
+
 
 ## Technical Implementation Details
 
 Several design patterns and technical approaches stand out:
 
-1. **Property accessors** for cleaner data management:
-```python
-@property
-def title(self):
-    """Getter for the title property."""
-    if self._title is None:
-        title_path = os.path.join(self.results_dir, 'title.txt')
-        if os.path.exists(title_path):
-            with open(title_path, 'r') as file:
-                self._title = file.read().strip()
-    return self._title
-```
-
-2. **Checkpoint decorators** for resilience and resume capabilities:
+1. **Checkpoint decorators** for resilience and resume capabilities:
 ```python
 @checkpoint
 def _summarize_chunk(self, context: str, max_summary_response_size: int, chunk_index: int) -> str:
     # Function can resume from previous runs if interrupted
 ```
 
-3. **Smart resource management** to avoid context window limitations:
+2. **Smart resource management** to avoid context window limitations:
 ```python
 max_summary_response_size = (self.num_cxt * 2)/len(chunks)
 ```
 
-4. **Timing utilities** for performance monitoring:
+3. **Timing utilities** for performance monitoring:
 ```python
 def _elapsed_time(self, start_time, end_time = None):
     # Calculates and formats execution time
