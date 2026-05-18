@@ -4,6 +4,7 @@ import argparse
 from sumtube.utils.config_util import print_config, interactive_set_config, get_config_json
 from sumtube.podcast_summary import PodcastSummary
 from sumtube.youtube_client import YouTubeClient
+from sumtube import __version__
 
 def main():
     parser = argparse.ArgumentParser(description='Summarize YouTube videos CLI.')
@@ -13,6 +14,7 @@ def main():
     parser.add_argument('--recover', help='Recover from a previous run')
     parser.add_argument('--print-config', action='store_true', help='Print current configuration')
     parser.add_argument('--set-config', action='store_true', help='Interactively set configuration')
+    parser.add_argument('--version', action='store_true', help='Print version')
 
     args = parser.parse_args()
 
@@ -27,6 +29,10 @@ def main():
 
     if args.set_config:
         interactive_set_config()
+        return
+
+    if args.version:
+        print(f"sumtube version {__version__}")
         return
 
     if args.output_dir:
