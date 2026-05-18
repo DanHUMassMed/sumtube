@@ -19,7 +19,7 @@ def main():
     args = parser.parse_args()
 
     # If no arguments passed, or none of the valid options are used, show help
-    if len(vars(args)) == 0 or not any([args.print_config, args.set_config, args.podcast_url]):
+    if not any([args.print_config, args.set_config, args.podcast_url, args.version]):
         parser.print_help()
         return
 
