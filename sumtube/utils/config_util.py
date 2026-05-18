@@ -13,8 +13,12 @@ DEFAULTS = {
 CONFIG_PATH = os.path.join(os.environ.get('HOME', '.'), '.config', 'sumtube')
 CONFIG_JSON_PATH = os.path.join(CONFIG_PATH, 'config.json')
 
-def get_config_json_path():
+def get_config_path():
     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    return CONFIG_PATH
+
+def get_config_json_path():
+    get_config_path()
     return CONFIG_JSON_PATH
 
 def get_config_json():
