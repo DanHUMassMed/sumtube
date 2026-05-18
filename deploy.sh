@@ -17,13 +17,13 @@ echo "Bumping version: $VERSION → $NEW_VERSION"
 
 # Update __init__.py
 sed -i '' "s/__version__ = .*/__version__ = \"$NEW_VERSION\"/" $VERSION_FILE
-sed -i '' "s/__version__ = .*/__version__ = \"$NEW_VERSION\"/" pyproject.toml
+sed -i '' "s/version = .*/version = \"$NEW_VERSION\"/" pyproject.toml
 
 # Build distribution
 
 
 rm -rf ./dist
-rm -rf ./how2.egg-info
+rm -rf ./sumtube.egg-info
 uv build
 
 # Run twine check and capture the output

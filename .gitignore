@@ -21,3 +21,4 @@ freeze.txt
 **/node_modules/
 notebooks/data/
 **/workspace/
+sumtube.egg-info

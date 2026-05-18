@@ -11,17 +11,17 @@ DEFAULTS = {
 }
 
 CONFIG_PATH = os.path.join(os.environ.get('HOME', '.'), '.config', 'sumtube')
-CONFIG_JSON = os.path.join(CONFIG_PATH, 'config.json')
+CONFIG_JSON_PATH = os.path.join(CONFIG_PATH, 'config.json')
 
-def get_config_path():
+def get_config_json_path():
     os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
-    return CONFIG_PATH
+    return CONFIG_JSON_PATH
 
 def get_config_json():
     """Load defaults from config file if it exists, otherwise use constants."""
-    if os.path.exists(CONFIG_JSON):
+    if os.path.exists(CONFIG_JSON_PATH):
         try:
-            with open(CONFIG_JSON, 'r') as f:
+            with open(CONFIG_JSON_PATH, 'r') as f:
                 file_defaults = json.load(f)
             defaults = {**DEFAULTS, **file_defaults}  # file overrides constants
             return defaults
@@ -56,10 +56,10 @@ def interactive_set_config():
     config_params['raw_text_chunk_size'] = get_input("Raw text chunk size", defaults['raw_text_chunk_size'], int)
     config_params['text_chunk_overlay_size'] = get_input("Text chunk overlay size", defaults['text_chunk_overlay_size'], int)
 
-    config_json = get_config_json()
+    config_json_path = get_config_json_path()
 
     # Write final config to file
-    with open(config_json, 'w') as f:
+    with open(config_json_path, 'w') as f:
         json.dump(config_params, f, indent=4)
 
     print("\nFinal configuration saved to config.json:")
